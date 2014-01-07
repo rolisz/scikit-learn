@@ -140,14 +140,14 @@ class Autoencoder(BaseEstimator, TransformerMixin):
     --------
 
     >>> import numpy as np
-    >>> from sklearn.neural_network import SAE
+    >>> from sklearn.neural_network import Autoencoder
     >>> X = np.array([[0, 0, 0], [0, 1, 1], [1, 0, 1], [1, 1, 1]])
-    >>> model = SAE(n_hidden=10)
+    >>> model = Autoencoder(n_hidden=10)
     >>> model.fit(X)
-    Autoencoder(activation_func='logistic', alpha=0.0001, batch_size=1000, beta=3,
-  learning_rate=0.0001, max_iter=20, n_hidden=10,
-  algorithm='l-bfgs', random_state=None, sparsity_param=0.01,
-  tol=1e-05, verbose=False)
+    Autoencoder(activation_func='logistic', algorithm='l-bfgs', alpha=0.003,
+          batch_size=4, beta=3, learning_rate=0.3, max_iter=20, n_hidden=10,
+          random_state=None, shuffle_data=False, sparsity_param=0.1, tol=1e-05,
+          verbose=False)
 
     References
     ----------
@@ -207,7 +207,7 @@ class Autoencoder(BaseEstimator, TransformerMixin):
         """
         self.activation = self.activation_functions[self.activation_func]
         self.derivative = self.derivative_functions[self.activation_func]
-        
+
     def _unpack(self, theta, n_features):
         """
         Extract the coefficients and intercepts (W1,W2,b1,b2) from theta
@@ -255,9 +255,10 @@ class Autoencoder(BaseEstimator, TransformerMixin):
         -------
         h: array-like, shape (n_samples, n_components)
         """
+        X = atleast2d_or_csr(X)
         return self.activation(np.dot(X, self.coef_hidden_) + self.intercept_hidden_)
 
-    def fit_transform(self, X):
+    def fit_transform(self, X, y=None):
         """
         Fit the model to the data X and transform it.
 
@@ -270,7 +271,7 @@ class Autoencoder(BaseEstimator, TransformerMixin):
         self.fit(X)
         return self.transform(X)
 
-    def fit(self, X):
+    def fit(self, X, y=None):
         """
         Fit the model to the data X.
 
@@ -318,7 +319,7 @@ class Autoencoder(BaseEstimator, TransformerMixin):
         elif self.algorithm == 'l-bfgs':
             self._backprop_lbfgs(
                 X, n_features,
-                a_hidden, a_output, 
+                a_hidden, a_output,
                 delta_o, n_samples)
         return self
 
@@ -367,9 +368,9 @@ class Autoencoder(BaseEstimator, TransformerMixin):
             (np.dot(delta_o, self.coef_output_.T) +
              sparsity_delta)) *\
             self.derivative(a_hidden)
-        # Get cost 
+        # Get cost
         cost = np.sum(diff ** 2) / (2 * n_samples)
-        # Add regularization term to cost 
+        # Add regularization term to cost
         cost += (0.5 * self.alpha) * (
             np.sum(self.coef_hidden_ ** 2) + np.sum(
                 self.coef_output_ ** 2))
@@ -379,11 +380,11 @@ class Autoencoder(BaseEstimator, TransformerMixin):
                 self.sparsity_param,
                 sparsity_param_hat))
         #Get gradients
-        W1grad = np.dot(X.T, delta_h) / n_samples 
+        W1grad = np.dot(X.T, delta_h) / n_samples
         W2grad = np.dot(a_hidden.T, delta_o) / n_samples
         b1grad = np.sum(delta_h, 0) / n_samples
         b2grad = np.sum(delta_o, 0) / n_samples
-        # Add regularization term to gradients 
+        # Add regularization term to gradients
         W1grad += self.alpha * self.coef_hidden_
         W2grad += self.alpha * self.coef_output_
         return cost, W1grad, W2grad, b1grad, b2grad
@@ -421,7 +422,7 @@ class Autoencoder(BaseEstimator, TransformerMixin):
         self.intercept_output_ -= (self.learning_rate * b2grad)
         # TODO: dynamically update learning rate
         return cost
-        
+
     def _backprop_lbfgs(
             self, X, n_features, a_hidden, a_output, delta_o, n_samples):
         """
